@@ -51,7 +51,7 @@
 
 union SplitIntData {
 	struct {
-		u32 var;
+		int var;
 	} data;
 	struct {
 		u8 data1;
@@ -74,44 +74,41 @@ void FlashQuadEnable(XQspiPs *QspiPtr);
 void kfft(float *pr, float *pi, int n, int k, float *fr, float *fi, float *amp);
 
 void WirteFlashData(union SplitIntData *data, int offset);
-void ReadFlashData(int offset, union SplitIntData *data);
+void ReadFlashData(union SplitIntData *data, int offset);
 void WriteAllData(union SplitIntData *data, int offset);
 void ReadAllData(union SplitIntData *data, int offset);
 
-void U32ToSplitIntData(u32 *data, union SplitIntData *result, u8 count){
+void U32ToSplitIntData(int *data, union SplitIntData *result, u8 count){
 	memcpy(result, data, count * 4);
 }
 
 void WriteAllData(union SplitIntData *data, int offset) {
 	union SplitIntData allData[50];
 	memcpy(&allData, data, 50 * 4);
-	WirteFlashData(allData, offset * 2);
+	WirteFlashData(data, offset * 2);
 
 	memcpy(&allData, data + 50, 50 * 4);
 	WirteFlashData(allData, offset * 2 + 1);
 }
 
 void ReadAllData(union SplitIntData *data, int offset) {
-	ReadFlashData(offset * 2, data);
-	ReadFlashData(offset * 2 + 1, data + 50);
+	ReadFlashData(data, offset * 2);
+	ReadFlashData(data + 50, offset * 2 + 1);
 }
 
 void WirteFlashData(union SplitIntData *data, int offset) {
 	int i;
 	for (i = 0; i < DATA_COUNT; i++) {
-		WriteBuffer[DATA_OFFSET + i * 5] = data[i].split.data1;
-		WriteBuffer[DATA_OFFSET + i * 5 + 1] = data[i].split.data2;
-		WriteBuffer[DATA_OFFSET + i * 5 + 2] = data[i].split.data3;
-		WriteBuffer[DATA_OFFSET + i * 5 + 3] = data[i].split.data4;
+		WriteBuffer[DATA_OFFSET + i * 4] = data[i].split.data1;
+		WriteBuffer[DATA_OFFSET + i * 4 + 1] = data[i].split.data2;
+		WriteBuffer[DATA_OFFSET + i * 4 + 2] = data[i].split.data3;
+		WriteBuffer[DATA_OFFSET + i * 4 + 3] = data[i].split.data4;
 	}
-	FlashWrite(&QspiInstance, offset * MAX_DATA + START_ADDRESS,
-	MAX_DATA,
-	WRITE_CMD);
+	FlashWrite(&QspiInstance, offset * PAGE_SIZE + START_ADDRESS, MAX_DATA, WRITE_CMD);
 }
 
-void ReadFlashData(int offset, union SplitIntData *data) {
-	FlashRead(&QspiInstance, offset * MAX_DATA + START_ADDRESS, MAX_DATA,
-	QUAD_READ_CMD);
+void ReadFlashData(union SplitIntData *data, int offset) {
+	FlashRead(&QspiInstance, offset * PAGE_SIZE + START_ADDRESS, MAX_DATA, QUAD_READ_CMD);
 	memcpy(data, &ReadBuffer[DATA_OFFSET + DUMMY_SIZE], MAX_DATA);
 }
 

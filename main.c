@@ -18,14 +18,15 @@ XScuTimer *TimerInstancePtr = &XSc_Timer;
 
 void init_gpio();
 void read_gpio(u8 *data_array);
+void initTimer();
+void calculate(u32 offset);
 int timerSet_S();
 u8 checkCache(u8 count);
-void initTimer();
 
 //----------------------GPIO Buffer
 u8 buffer[12];
 //Êý¾Ý»º´æ
-int cache[200];
+int cache[CACHE_NUMBER];
 u32 flashOffset = 0;
 //----------------------
 u8 readTime = 0;
@@ -42,8 +43,9 @@ int main(){
 
 	u8 signal = 0;
 	u8 count = 0;
+	u32 offset = 0;
 
-	memset(cache,(u32)0x00,sizeof(buffer));
+	memset(cache,(u32)0x00,sizeof(cache));
 	XScuTimer_Start(TimerInstancePtr);
 	while(1){
 		memset(buffer,0x00,sizeof(buffer));
@@ -51,6 +53,10 @@ int main(){
 		int result = 0;
 		for(int i = 0;i < 12;i++){
 			result += (buffer[11-i] & 0x0F) << i;
+		}
+
+		if((count > 0 && abs(cache[count-1] - result) > 400) || abs(result - 2048) > 1100 || result < 2048){
+			continue;
 		}
 
 		if(!signal){
@@ -64,68 +70,72 @@ int main(){
 			signal = checkCache(count);
 		}
 
-		if(count == 0 || (count > 0 && abs(cache[count-1] - result) < 500)){
-			cache[count] = result;
-			count++;
-		}
+		cache[count] = result;
+		count++;
+		usleep(10);
+
+//		if(count == CACHE_NUMBER){
+//			for(int i = 0;i < CACHE_NUMBER;i++){
+//				printf("%d, ",cache[i]);
+//			}
+////			union SplitIntData result[50];
+////			U32ToSplitIntData(cache,result,50);
+////
+////			u32 startOffset = offset * CACHE_NUMBER / DATA_COUNT;
+////			for(int i = 0;i < CACHE_NUMBER / DATA_COUNT;i++){
+////				WirteFlashData(result, (startOffset + i));
+////			}
+////			printf("Write %d %d\r\n",startOffset,offset);
+////			free(result);
+//
+////			if(offset > 0 && offset % (CALCULATE_NUMBER / CACHE_NUMBER) == 0){
+////				calculate(offset);
+//////				offset = 0;
+////			}
+//
+//			memset(cache,(u32)0x00,sizeof(cache));
+//			count = 0;
+////			offset++;
+//		}
 
 		if(count == 200){
-			int max = cache[0], min = cache[0];
-			for(int i = 0;i < 200;i++) {
-				if(cache[i] > max){
-					max = cache[i];
-				}
-				if(cache[i] < min){
-					min = cache[i];
-				}
+			for(int i = 0;i < 200;i++){
+				printf("%d, ",cache[i]);
 			}
+			printf("\r\n");
 
-			int average = ((max - min) / 2);
-
-			int number = 0;
-			for(int i = 1;i < 200;i++) {
-				if(((cache[i-1] - average) > 0 && (cache[i] - average) < 0) ||
-						((cache[i-1] - average) < 0 && (cache[i] - average) > 0) ||
-						(cache[i-1] - average) == 0 || (cache[i-1] - average) == 0
-				){
-					number++;
-				}
-			}
-
-			numberAll += number;
-
-			printf("%d \r\n", numberAll);
-//			printf("%d", (number / 2)/readTime);
-
-//			(cache[i]/(float)4095)*10-5;
-
-			if(readTime == READ_TIME){
-				u32 time = XScuTimer_GetCounterValue(TimerInstancePtr);
-			//	printf("%d \r\n", time);
-				double readTime = ((double)1000000/TIMER_LOAD_VALUE)*(double)time;
-
-//				printf("%d \r\n", numberAll);
-
-				XScuTimer_RestartTimer(TimerInstancePtr);
-				readTime = 0;
-				numberAll = 0;
-			}else{
-				readTime++;
-			}
-
-			memset(cache,(u32)0x00,sizeof(buffer));
+			memset(cache,(u32)0x00,sizeof(cache));
 			count = 0;
+			offset++;
 		}
+//		usleep(1000);
 
 	}
-
 	return 0;
 }
 
+void calculate(u32 offset){
+	int start = offset - (CALCULATE_NUMBER/CACHE_NUMBER);
+	if(start < 0){
+		return;
+	}
+
+	union SplitIntData result[50];
+//	printf("Read %d %d\r\n",start,(CACHE_NUMBER / CALCULATE_NUMBER) * (CACHE_NUMBER / DATA_COUNT));
+	for(int i = 0;i < (CACHE_NUMBER / CALCULATE_NUMBER) * (CACHE_NUMBER / DATA_COUNT);i++){
+		memset(result,(u32)0x00,sizeof(result));
+		ReadFlashData(result, (start + i));
+//		for(int i = 0;i < 50;i++){
+//			printf("%d, ",result[i].data.var);
+//		}
+	}
+//	FlashErase(&QspiInstance, START_ADDRESS, MAX_DATA);
+}
+
 u8 checkCache(u8 count){
-	if(count > 30){
-		for(u8 i = count-30;i < count;i++){
-			if(abs(cache[i] - 2048) > 50){
+	if(count > 60){
+		for(u8 i = count-60;i < count;i++){
+			if(abs(cache[i] - 2048) > 25){
 				return 1;
 			}
 		}
